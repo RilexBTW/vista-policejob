@@ -7,6 +7,7 @@ local FingerDrops = {}
 local Objects = {}
 local QBCore = exports['qb-core']:GetCoreObject()
 local updatingCops = false
+local ox_inventory = exports.ox_inventory
 
 -- Functions
 local function UpdateBlips()
@@ -334,6 +335,16 @@ QBCore.Commands.Add("plateinfo", Lang:t("commands.plateinfo"), {{name = "plate",
     end
 end)
 
+QBCore.Commands.Add("impound", Lang:t("commands.impound"), {{name = "price", help = Lang:t('info.impound_price')}}, false, function(source, args)
+    local src = source
+    local Player = QBCore.Functions.GetPlayer(src)
+    if Player.PlayerData.job.name == "police" and Player.PlayerData.job.onduty then
+        TriggerClientEvent("police:client:ImpoundVehicle", src, false, tonumber(args[1]))
+    else
+        TriggerClientEvent('QBCore:Notify', src, Lang:t("error.on_duty_police_only"), 'error')
+    end
+end)
+
 QBCore.Commands.Add("depot", Lang:t("commands.depot"), {{name = "price", help = Lang:t('info.impound_price')}}, false, function(source, args)
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
@@ -344,7 +355,7 @@ QBCore.Commands.Add("depot", Lang:t("commands.depot"), {{name = "price", help = 
     end
 end)
 
-QBCore.Commands.Add("impound", Lang:t("commands.impound"), {}, false, function(source)
+--[[QBCore.Commands.Add("impound", Lang:t("commands.impound"), {}, false, function(source)
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
     if Player.PlayerData.job.name == "police" and Player.PlayerData.job.onduty then
@@ -352,7 +363,7 @@ QBCore.Commands.Add("impound", Lang:t("commands.impound"), {}, false, function(s
     else
         TriggerClientEvent('QBCore:Notify', src, Lang:t("error.on_duty_police_only"), 'error')
     end
-end)
+end) -- ]] 
 
 QBCore.Commands.Add("paytow", Lang:t("commands.paytow"), {{name = "id", help = Lang:t('info.player_id')}}, true, function(source, args)
     local src = source
@@ -404,11 +415,11 @@ QBCore.Commands.Add('fine', Lang:t("commands.fine"), {{name = 'id', help = Lang:
                     if billed.Functions.RemoveMoney('bank', amount, "paid-fine") then
                         TriggerClientEvent('QBCore:Notify', source, Lang:t("info.fine_issued"), 'success')
                         TriggerClientEvent('QBCore:Notify', billed.PlayerData.source, Lang:t("info.received_fine"))
-                        exports['qb-management']:AddMoney(biller.PlayerData.job.name, amount)
+                        exports['Renewed-Banking']:addAccountMoney(biller.PlayerData.job.name, amount)
                     elseif billed.Functions.RemoveMoney('cash', amount, "paid-fine") then
                         TriggerClientEvent('QBCore:Notify', source, Lang:t("info.fine_issued"), 'success')
                         TriggerClientEvent('QBCore:Notify', billed.PlayerData.source, Lang:t("info.received_fine"))
-                        exports['qb-management']:AddMoney(biller.PlayerData.job.name, amount)
+                        exports['Renewed-Banking']:addAccountMoney(biller.PlayerData.job.name, amount)
                     else
                         MySQL.Async.insert('INSERT INTO phone_invoices (citizenid, amount, society, sender, sendercitizenid) VALUES (?, ?, ?, ?, ?)',{billed.PlayerData.citizenid, amount, biller.PlayerData.job.name, biller.PlayerData.charinfo.firstname, biller.PlayerData.citizenid}, function(id)
                             if id then
@@ -479,7 +490,7 @@ QBCore.Commands.Add("takedna", Lang:t("commands.takedna"), {{name = "id", help =
             type = "dna",
             dnalabel = DnaHash(OtherPlayer.PlayerData.citizenid)
         }
-        if not Player.Functions.AddItem("filled_evidence_bag", 1, false, info) then return end
+        if not ox_inventory:AddItem(source,"filled_evidence_bag", 1, false, info) then return end
         TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items["filled_evidence_bag"], "add")
     else
         TriggerClientEvent('QBCore:Notify', src, Lang:t("error.have_evidence_bag"), "error")
@@ -669,7 +680,7 @@ RegisterNetEvent('police:server:CuffPlayer', function(playerId, isSoftcuff)
     local targetPed = GetPlayerPed(playerId)
     local playerCoords = GetEntityCoords(playerPed)
     local targetCoords = GetEntityCoords(targetPed)
-    if #(playerCoords - targetCoords) > 2.5 then return DropPlayer(src, "Attempted exploit abuse") end
+    --if #(playerCoords - targetCoords) > 2.5 then return DropPlayer(src, "Attempted exploit abuse") end
 
     local Player = QBCore.Functions.GetPlayer(src)
     local CuffedPlayer = QBCore.Functions.GetPlayer(playerId)
@@ -766,7 +777,7 @@ RegisterNetEvent('police:server:BillPlayer', function(playerId, price)
     if not Player or not OtherPlayer or Player.PlayerData.job.name ~= "police" then return end
 
     OtherPlayer.Functions.RemoveMoney("bank", price, "paid-bills")
-    exports['qb-management']:AddMoney("police", price)
+    exports['Renewed-Banking']:addAccountMoney("police", price)
     TriggerClientEvent('QBCore:Notify', OtherPlayer.PlayerData.source, Lang:t("info.fine_received", {fine = price}))
 end)
 
@@ -776,7 +787,7 @@ RegisterNetEvent('police:server:JailPlayer', function(playerId, time)
     local targetPed = GetPlayerPed(playerId)
     local playerCoords = GetEntityCoords(playerPed)
     local targetCoords = GetEntityCoords(targetPed)
-    if #(playerCoords - targetCoords) > 2.5 then return DropPlayer(src, "Attempted exploit abuse") end
+    --if #(playerCoords - targetCoords) > 2.5 then return DropPlayer(src, "Attempted exploit abuse") end
 
     local Player = QBCore.Functions.GetPlayer(src)
     local OtherPlayer = QBCore.Functions.GetPlayer(playerId)
@@ -863,7 +874,7 @@ RegisterNetEvent('police:server:SeizeCash', function(playerId)
     local moneyAmount = SearchedPlayer.PlayerData.money["cash"]
     local info = { cash = moneyAmount }
     SearchedPlayer.Functions.RemoveMoney("cash", moneyAmount, "police-cash-seized")
-    Player.Functions.AddItem("moneybag", 1, false, info)
+    ox_inventory:AddItem(source,"moneybag", 1, false, info)
     TriggerClientEvent('inventory:client:ItemBox', src, QBCore.Shared.Items["moneybag"], "add")
     TriggerClientEvent('QBCore:Notify', SearchedPlayer.PlayerData.source, Lang:t("info.cash_confiscated"))
 end)
@@ -976,7 +987,7 @@ RegisterNetEvent('evidence:server:AddBlooddropToInventory', function(bloodId, bl
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
     if Player.Functions.RemoveItem("empty_evidence_bag", 1) then
-        if Player.Functions.AddItem("filled_evidence_bag", 1, false, bloodInfo) then
+        if ox_inventory:AddItem(source, "filled_evidence_bag", 1, false, bloodInfo) then
             TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items["filled_evidence_bag"], "add")
             TriggerClientEvent("evidence:client:RemoveBlooddrop", -1, bloodId)
             BloodDrops[bloodId] = nil
@@ -990,7 +1001,7 @@ RegisterNetEvent('evidence:server:AddFingerprintToInventory', function(fingerId,
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
     if Player.Functions.RemoveItem("empty_evidence_bag", 1) then
-        if Player.Functions.AddItem("filled_evidence_bag", 1, false, fingerInfo) then
+        if ox_inventory:AddItem(source, "filled_evidence_bag", 1, false, fingerInfo) then
             TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items["filled_evidence_bag"], "add")
             TriggerClientEvent("evidence:client:RemoveFingerprint", -1, fingerId)
             FingerDrops[fingerId] = nil
@@ -1044,7 +1055,7 @@ RegisterNetEvent('evidence:server:AddCasingToInventory', function(casingId, casi
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)
     if Player.Functions.RemoveItem("empty_evidence_bag", 1) then
-        if Player.Functions.AddItem("filled_evidence_bag", 1, false, casingInfo) then
+        if ox_inventory:AddItem(source, "filled_evidence_bag", 1, false, casingInfo) then
             TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items["filled_evidence_bag"], "add")
             TriggerClientEvent("evidence:client:RemoveCasing", -1, casingId)
             Casings[casingId] = nil
